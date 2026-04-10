@@ -1,4 +1,4 @@
-package model;
+package com.payzapp.userservice.model;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -25,9 +25,9 @@ public class User {
     @Column(nullable = false)
     private String lastName;
     @Column(nullable = false, unique = true)
-    private String emailId;
+    private String email;
     @Column(nullable = false)
-    private String hashedPassword;
+    private String passwordHash;
     @Column(nullable = false, unique = true)
     private String phoneNumber;
     @Column(nullable = false)
