@@ -1,4 +1,4 @@
-package com.payzapp.userservice.model;
+package model;
 
 public enum AccountStatus {
     ACTIVE,
