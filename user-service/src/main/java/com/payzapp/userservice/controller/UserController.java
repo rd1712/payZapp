@@ -1,5 +1,7 @@
 package com.payzapp.userservice.controller;
 
+import com.payzapp.userservice.dto.LoginRequest;
+import com.payzapp.userservice.dto.LoginResponse;
 import com.payzapp.userservice.dto.RegisterRequest;
 import com.payzapp.userservice.dto.RegisterResponse;
 import com.payzapp.userservice.service.UserService;
@@ -19,6 +21,11 @@ public class UserController {
     public RegisterResponse registerUser(@Valid @RequestBody RegisterRequest request) {
 
         return userService.register(request);
+    }
+
+    @PostMapping("/login")
+    public LoginResponse login(@Valid @RequestBody LoginRequest request){
+       return  userService.login(request);
     }
 
 }
