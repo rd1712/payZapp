@@ -26,6 +26,8 @@ public class User {
     private String lastName;
     @Column(nullable = false, unique = true)
     private String email;
+    @Column(nullable = false, unique = true)
+    private String userName;
     @Column(nullable = false)
     private String passwordHash;
     @Column(nullable = false, unique = true)
