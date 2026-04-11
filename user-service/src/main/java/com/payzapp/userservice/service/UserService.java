@@ -2,6 +2,7 @@ package com.payzapp.userservice.service;
 
 import com.payzapp.userservice.dto.RegisterRequest;
 import com.payzapp.userservice.dto.RegisterResponse;
+import com.payzapp.userservice.exception.UserAlreadyExistException;
 import com.payzapp.userservice.model.AccountStatus;
 import com.payzapp.userservice.model.User;
 import com.payzapp.userservice.repository.UserRepository;
@@ -20,10 +21,10 @@ public class UserService {
     public RegisterResponse register(RegisterRequest request) {
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already exist");
+            throw new UserAlreadyExistException("Email already exist");
         }
-        if (userRepository.existsByUsername(request.getUserName())) {
-            throw new RuntimeException("UserName already exist");
+        if (userRepository.existsByUserName(request.getUserName())) {
+            throw new UserAlreadyExistException("UserName already exist");
         }
         String passwordHash = passwordEncoder.encode(request.getPassword());
 
