@@ -561,7 +561,7 @@ If you see old tutorials using `javax.persistence` — that's `jakarta.persisten
 ### The Problem
 Your application evolves — new features require schema changes. Without version control for your database:
 - Week 1: create `users` table
-- Week 3: add `phone_number` column  
+- Week 3: add `phone_number` column
 - New developer joins: their database is missing `phone_number`, app crashes
 
 ### How Flyway Works
@@ -990,4 +990,616 @@ public class RegisterResponse {
 ---
 
 *Last updated: Session 1 — Phase 0 complete, Phase 1 (User Service) 50% complete*
-*Next session: UserService register() method → JWT implementation → UserController*
+
+---
+
+## 12. JWT — JSON Web Token
+
+### What is JWT?
+JWT is a Base64 encoded token with three parts separated by dots:
+
+```
+eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOiI5OGI4MzA0NyJ9.xK9V3zL2mN8pQ1rT
+|___________________|.|___________________|.|_________|
+      Header               Payload           Signature
+```
+
+**Part 1 — Header:**
+```json
+{ "alg": "HS256", "typ": "JWT" }
+```
+Just metadata — which algorithm signs this token. Base64 encoded.
+
+**Part 2 — Payload (Claims):**
+```json
+{
+  "sub": "98b83047-f571-44d6-a47f-20e6bc24d518",
+  "email": "rohit@gmail.com",
+  "role": "USER",
+  "iat": 1712068221,
+  "exp": 1712154621
+}
+```
+The actual data. `iat` = issued at, `exp` = expiry. Anyone can decode and read this — it's NOT encrypted.
+
+**Part 3 — Signature:**
+```
+HMACSHA256(base64(header) + "." + base64(payload), secretKey)
+```
+The server signs the header + payload with a secret key. Nobody else can forge this without the key.
+
+---
+
+### What is HMAC?
+HMAC = Hash-based Message Authentication Code.
+
+**Problem with plain hashing:** Anyone can hash anything. If the server just hashed the payload:
+1. Hacker modifies payload
+2. Hacker hashes the modified payload themselves
+3. Hacker replaces the signature
+4. Server hashes what it received → matches → attack succeeds
+
+**HMAC solution — add a secret key:**
+```
+HMAC(payload, secretKey) → signature
+```
+Now the hacker modifies the payload but doesn't have the secret key. They can't generate the correct signature. Server validates → doesn't match → rejected.
+
+**One line:** Plain hash = anyone can forge. HMAC = only secret key holder can forge.
+
+---
+
+### What is a Claim?
+A claim is just a key-value pair in the JWT payload:
+```json
+{
+  "userId": "98b83047",    ← custom claim
+  "role": "USER",          ← custom claim
+  "exp": 1712154621        ← standard claim (expiry)
+}
+```
+
+Two types:
+- **Standard claims** — predefined: `sub` (subject), `iat` (issued at), `exp` (expiry)
+- **Custom claims** — anything you add: `email`, `role`
+
+What's safe to put in JWT:
+- `userId` — just an identifier, not sensitive
+- `role` — needed for authorization
+- `email` — some companies include it
+
+What NEVER goes in JWT:
+- `passwordHash`
+- Credit card numbers
+- Any truly sensitive personal data
+
+**Why?** JWT payload is Base64 encoded, NOT encrypted. Anyone with the token can decode and read it.
+
+---
+
+### JWT Lifecycle
+```
+1. User logs in with email + password
+2. Server validates credentials
+3. Server creates payload: { userId, email, role, exp }
+4. Server signs it with secret key → generates signature
+5. Server combines: header.payload.signature = JWT
+6. Server sends JWT to client
+
+7. Client stores JWT
+8. Every request: client sends JWT in Authorization header:
+   Authorization: Bearer eyJhbGci...
+
+9. Server receives JWT
+10. Server validates signature using secret key
+11. If valid → reads userId from payload → knows who you are
+12. If expired/invalid → 401 Unauthorized
+```
+
+---
+
+### JwtUtil — Implementation
+
+```java
+@Component
+public class JwtUtil {
+
+    @Value("${jwt.secret}")        // reads from application.yml
+    private String secret;
+
+    @Value("${jwt.expiration}")    // 86400000 = 24 hours in milliseconds
+    private long expiration;
+
+    // Convert Base64 secret string to cryptographic Key
+    private Key getSigningKey() {
+        byte[] keyBytes = Decoders.BASE64.decode(secret);
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    // Generate JWT token from User object
+    public String generateToken(User user) {
+        return Jwts.builder()
+            .setSubject(user.getUserId().toString())   // who this token is for
+            .claim("email", user.getEmail())           // custom claim
+            .claim("role", "USER")                     // custom claim
+            .setIssuedAt(new Date())                   // when issued
+            .setExpiration(new Date(System.currentTimeMillis() + expiration))  // when expires
+            .signWith(getSigningKey())                 // sign with secret
+            .compact();                                // build the token string
+    }
+
+    // Validate JWT and return claims (payload)
+    public Claims validateToken(String token) {
+        return Jwts.parserBuilder()
+            .setSigningKey(getSigningKey())
+            .build()
+            .parseClaimsJws(token)   // parseClaimsJws = signed token (JWS)
+            .getBody();              // returns the payload as Claims map
+    }
+}
+```
+
+**Why Base64 encode the secret in application.yml?**
+HMAC-SHA256 needs raw bytes, not a plain string. We store the secret as Base64 in config (safe text format), then decode it back to raw bytes before using it cryptographically.
+
+**`parseClaimsJws` vs `parseClaimsJwt`:**
+- `parseClaimsJwt` — unsigned tokens (no signature)
+- `parseClaimsJws` — signed tokens (JWT with signature = JWS)
+  Since we sign our tokens, we always use `parseClaimsJws`.
+
+---
+
+### application.yml JWT config
+```yaml
+jwt:
+  secret: cGF5emFwcC1zZWNyZXQta2V5LXRoYXQtaXMtbG9uZy1lbm91Z2gtZm9yLWhzMjU2
+  expiration: 86400000   # 24 hours in milliseconds (86400 seconds × 1000)
+```
+
+Generate Base64 secret:
+```bash
+echo -n "your-plain-secret-here" | base64
+```
+
+---
+
+### Interview Answer
+
+**"How do JWT tokens work in your system?"**
+*"JWT tokens have three parts — header, payload, and signature. The header specifies the algorithm, the payload carries user claims like userId and role, and the signature is an HMAC of the header and payload using our server-side secret. When a user logs in, we generate a JWT and send it to the client. On every subsequent request, the client sends the JWT in the Authorization header. Our JWT filter validates the signature — if valid, we extract the userId from the payload and set the authenticated user in Spring Security's context. The token is stateless — we never store it server-side."*
+
+---
+
+## 13. JWT Filter — JwtAuthFilter
+
+### Why do we need a JWT Filter?
+Spring Security doesn't natively understand JWT. We need a filter that:
+1. Intercepts every request
+2. Reads JWT from the `Authorization` header
+3. Validates it
+4. Tells Spring Security "this user is authenticated"
+
+Without this filter, Spring Security has no way to understand JWT tokens and rejects all requests to protected endpoints.
+
+---
+
+### What is OncePerRequestFilter?
+`OncePerRequestFilter` is a Spring base class for filters that guarantees your filter runs **exactly once per request**.
+
+**Why "exactly once" matters:**
+Spring can forward requests internally — for example, when an error occurs, Spring forwards to `/error` internally. A plain `Filter` implementation would run twice — once for the original request, once for the internal forward.
+
+For a security filter, running twice is problematic:
+- Validates JWT twice (unnecessary overhead)
+- Sets SecurityContext twice (potential issues)
+- Unpredictable behavior on errors
+
+`OncePerRequestFilter` tracks if it already ran using a request attribute. Second time it sees "already ran" → skips automatically.
+
+---
+
+### What is SecurityContext?
+`SecurityContext` is Spring Security's thread-local storage for the current authenticated user. It lives for exactly one request's lifetime.
+
+```
+Request arrives
+     ↓
+JwtAuthFilter: validates token → puts "Rohit, role USER" in SecurityContext
+     ↓
+Controller: can read who is logged in from SecurityContext
+     ↓
+Service: can also read from SecurityContext if needed
+     ↓
+Request ends → SecurityContext cleared automatically
+```
+
+**`SecurityContextHolder` vs `SecurityContext`:**
+- `SecurityContextHolder` — static utility class, the access point (like a locker room)
+- `SecurityContext` — holds the Authentication object for current thread (like a locker)
+- `Authentication` — the actual user details inside (like the items in the locker)
+
+```
+SecurityContextHolder → getContext() → SecurityContext → getAuthentication() → Authentication
+```
+
+---
+
+### Complete JwtAuthFilter
+
+```java
+@Component
+@RequiredArgsConstructor
+public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private final JwtUtil jwtUtil;
+
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,    // incoming HTTP request
+            HttpServletResponse response,  // outgoing HTTP response
+            FilterChain filterChain        // rest of the filter chain
+    ) throws ServletException, IOException {
+
+        // Step 1: Read Authorization header
+        String authHeader = request.getHeader("Authorization");
+        String token = null;
+
+        // Step 2: Check if header exists and has Bearer token
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);  // skip "Bearer " (7 chars)
+
+            try {
+                // Step 3: Validate token and get claims
+                Claims claim = jwtUtil.validateToken(token);
+
+                // Step 4: Create Spring Security authentication object
+                UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(
+                        claim.getSubject(),   // userId as principal
+                        null,                 // password (not needed after auth)
+                        List.of(new SimpleGrantedAuthority("ROLE_" + claim.get("role")))
+                    );
+
+                // Step 5: Attach request details (IP, session info) for audit
+                authentication.setDetails(
+                    new WebAuthenticationDetailsSource().buildDetails(request)
+                );
+
+                // Step 6: Put authenticated user in SecurityContext
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            } catch (Exception e) {
+                // Invalid/expired token — do nothing
+                // SecurityContext stays empty → Spring Security returns 401
+            }
+        }
+
+        // Step 7: Always pass request to next filter
+        filterChain.doFilter(request, response);
+    }
+}
+```
+
+**Line by line explained:**
+
+`request.getHeader("Authorization")` — reads the Authorization header. Format: `Bearer eyJhbGci...`
+
+`authHeader.substring(7)` — "Bearer " is exactly 7 characters. This extracts everything after it — the actual token.
+
+`jwtUtil.validateToken(token)` — validates signature and expiry. Throws exception if invalid — caught by catch block.
+
+`UsernamePasswordAuthenticationToken` — Spring Security's object representing an authenticated user. Three params: who (userId), credentials (null), roles.
+
+`authentication.setDetails(...)` — attaches IP address and other request metadata. Used for audit logging.
+
+`SecurityContextHolder.getContext().setAuthentication(authentication)` — puts the verified identity in Spring's whiteboard for this request.
+
+`filterChain.doFilter(request, response)` — **critical**. Passes request to next filter. If you forget this, request stops here and never reaches controller.
+
+Empty catch block — if token is invalid, we don't crash. We just don't set SecurityContext. Spring Security then sees no authenticated user and returns 401.
+
+---
+
+### How Spring knows to run this filter
+Two things make it automatic:
+
+1. `@Component` — Spring creates the bean on startup
+2. `extends OncePerRequestFilter` — Spring Security registers it with Tomcat automatically
+
+Plus we explicitly add it in SecurityConfig:
+```java
+.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+```
+
+This tells Spring — run our filter BEFORE the default username/password filter. Our filter sets SecurityContext first; Spring's default filter sees it's done and skips.
+
+---
+
+## 14. Global Exception Handling
+
+### The Problem
+When `UserService` throws `RuntimeException("Email already exists")`, Spring doesn't know what HTTP status to return. The client gets an empty response or 500 Internal Server Error.
+
+We need a way to map exceptions to proper HTTP responses globally — once, not in every controller.
+
+### @ControllerAdvice
+`@ControllerAdvice` marks a class as a global exception handler. Spring intercepts any exception thrown anywhere in the application and routes it to the matching `@ExceptionHandler` method.
+
+```
+UserService throws UserAlreadyExistException
+           ↓
+Spring catches it globally
+           ↓
+Finds @ExceptionHandler(UserAlreadyExistException.class)
+           ↓
+Calls handleUserAlreadyExists(ex)
+           ↓
+Returns 409 response to client
+```
+
+### Custom Exceptions
+
+**UserAlreadyExistException:**
+```java
+public class UserAlreadyExistException extends RuntimeException {
+    public UserAlreadyExistException(String message) {
+        super(message);  // passes message to RuntimeException
+    }
+}
+```
+
+**InvalidCredentialException:**
+```java
+public class InvalidCredentialException extends RuntimeException {
+    public InvalidCredentialException(String message) {
+        super(message);
+    }
+}
+```
+
+Why extend `RuntimeException`? Unchecked exceptions — callers don't need to declare or catch them. Clean code.
+
+Why `public` constructor? Other classes need to instantiate it — `new UserAlreadyExistException(...)`.
+
+### GlobalExceptionHandler
+
+```java
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(UserAlreadyExistException.class)
+    public ResponseEntity<?> handleUserAlreadyExists(UserAlreadyExistException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
+        // 409 Conflict — resource already exists
+    }
+
+    @ExceptionHandler(InvalidCredentialException.class)
+    public ResponseEntity<?> handleInvalidCredentials(InvalidCredentialException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ex.getMessage());
+        // 401 Unauthorized — wrong credentials
+    }
+}
+```
+
+**`ResponseEntity<?>`** — Spring's wrapper for HTTP responses. The `?` means any type of body. Builder pattern:
+- `.status(HttpStatus.CONFLICT)` — set HTTP status 409
+- `.body(ex.getMessage())` — set response body
+
+### HTTP Status Codes Reference
+| Code | Name | When to use |
+|---|---|---|
+| 200 | OK | Success |
+| 201 | Created | Resource created successfully |
+| 400 | Bad Request | Client sent invalid data |
+| 401 | Unauthorized | Not authenticated (no/invalid JWT) |
+| 403 | Forbidden | Authenticated but not allowed |
+| 404 | Not Found | Resource doesn't exist |
+| 409 | Conflict | Resource already exists |
+| 500 | Internal Server Error | Server crashed |
+
+**401 vs 403:**
+- `401` — "Who are you?" — no/invalid token, wrong password
+- `403` — "I know who you are, but no." — valid token but no permission
+
+**Security note:** Return the same `401` for both "email not found" and "wrong password". Never tell the attacker which one failed — that would help them enumerate valid emails.
+
+---
+
+## 15. Complete User Service Flow
+
+### Registration Flow
+```
+POST /api/auth/register
+{
+  "email": "rohit@gmail.com",
+  "userName": "rohit",
+  "firstName": "Rohit",
+  "lastName": "Deshmukh",
+  "password": "password123",
+  "phoneNumber": "9999999999"
+}
+```
+
+1. `UserController.registerUser()` receives request
+2. `@Valid` triggers validation — `@NotBlank`, `@Email` annotations checked
+3. `UserService.register()` called
+4. Check `existsByEmail()` → if exists → throw `UserAlreadyExistException` → 409
+5. Check `existsByUserName()` → if exists → throw `UserAlreadyExistException` → 409
+6. `passwordEncoder.encode(password)` → BCrypt hash
+7. `User.builder()...build()` → create User object with status `INACTIVE`
+8. `userRepository.save(user)` → Hibernate runs INSERT, returns saved user with UUID
+9. Build `RegisterResponse` from saved user (no password hash)
+10. Return 200 with response
+
+---
+
+### Login Flow
+```
+POST /api/auth/login
+{ "email": "rohit@gmail.com", "password": "password123" }
+```
+
+1. `UserController.login()` receives request
+2. `UserService.login()` called
+3. `findByEmail()` → if not found → throw `InvalidCredentialException` → 401
+4. `passwordEncoder.matches(rawPassword, storedHash)` → if false → throw `InvalidCredentialException` → 401
+5. `jwtUtil.generateToken(user)` → creates signed JWT
+6. Return `LoginResponse` with token, userId, email
+
+---
+
+### Protected Endpoint Flow
+```
+GET /api/user/profile
+Authorization: Bearer eyJhbGci...
+```
+
+1. Request arrives at Tomcat
+2. `JwtAuthFilter.doFilterInternal()` runs
+3. Reads `Authorization` header
+4. Extracts token (after "Bearer ")
+5. `jwtUtil.validateToken(token)` → validates signature + expiry
+6. Creates `UsernamePasswordAuthenticationToken` with userId and role
+7. Sets in `SecurityContextHolder`
+8. Passes to next filter via `filterChain.doFilter()`
+9. Spring Security checks SecurityContext → sees authenticated user → allows request
+10. Controller runs → returns response
+
+**Without token:**
+Step 5 fails or header is null → SecurityContext stays empty → Spring Security returns 401
+
+---
+
+### UserController — Complete Code
+```java
+@RequiredArgsConstructor
+@RestController
+@RequestMapping("/api/auth")
+public class UserController {
+
+    private final UserService userService;
+
+    @PostMapping("/register")
+    public RegisterResponse registerUser(@Valid @RequestBody RegisterRequest request) {
+        return userService.register(request);
+    }
+
+    @PostMapping("/login")
+    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+        return userService.login(request);
+    }
+}
+```
+
+**`@RestController`** = `@Controller` + `@ResponseBody`. Returns JSON automatically — no HTML templates.
+
+**`@RequestMapping("/api/auth")`** — base URL for all endpoints in this controller.
+
+**`@PostMapping("/register")`** — handles `POST /api/auth/register`.
+
+**`@Valid`** — triggers Jakarta validation annotations (`@NotBlank`, `@Email`) on the request DTO.
+
+**`@RequestBody`** — tells Spring to read the HTTP request body as JSON and deserialize it into the DTO. Without this, the DTO fields are all null.
+
+---
+
+### SecurityConfig — Complete Code
+```java
+@Configuration
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final JwtAuthFilter jwtFilter;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable())
+            // JWT uses headers not cookies → CSRF attacks impossible → disable
+
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            // Don't create sessions → JWT carries everything → server stores nothing
+
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/**").permitAll()  // register + login = public
+                .anyRequest().authenticated()                 // everything else needs JWT
+            )
+
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) ->
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
+                )
+            )
+            // Return 401 (not Spring's default 403) for unauthenticated requests
+
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+            // Run our JWT filter before Spring's default auth filter
+
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+```
+
+**`SecurityFilterChain`** is a Spring Security interface. When Spring finds a `@Bean` of this type, it automatically picks it up and uses it as the security configuration.
+
+**`addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)`** — registers our JWT filter in the chain BEFORE Spring's default username/password filter. Our filter sets SecurityContext first; default filter sees it's done and skips.
+
+---
+
+## 16. Interview Arsenal
+
+### Concepts You Can Now Confidently Explain
+
+| Concept | Can explain? | Can code? |
+|---|---|---|
+| Multi-module Maven project | ✅ | ✅ |
+| `dependencyManagement` vs `dependencies` | ✅ | ✅ |
+| BOM import | ✅ | ✅ |
+| Docker containers vs VMs | ✅ | ✅ |
+| Docker Compose for local dev | ✅ | ✅ |
+| Spring Boot 3-layer architecture | ✅ | ✅ |
+| JPA entities and annotations | ✅ | ✅ |
+| Hibernate ORM | ✅ | ✅ |
+| Flyway migrations | ✅ | ✅ |
+| Spring Security filter chain | ✅ | ✅ |
+| CSRF and why we disable it | ✅ | ✅ |
+| Sessions vs JWT | ✅ | ✅ |
+| Stateless authentication | ✅ | ✅ |
+| BCrypt password hashing | ✅ | ✅ |
+| Repository pattern with Spring Data | ✅ | ✅ |
+| DTOs and why they matter | ✅ | ✅ |
+| Constructor injection over field injection | ✅ | ✅ |
+| Optional<T> for null safety | ✅ | ✅ |
+| JWT generation and validation | ✅ | ✅ |
+| HMAC and why it prevents tampering | ✅ | ✅ |
+| JWT filter (OncePerRequestFilter) | ✅ | ✅ |
+| SecurityContext and SecurityContextHolder | ✅ | ✅ |
+| Global exception handling (@ControllerAdvice) | ✅ | ✅ |
+| HTTP status codes (401 vs 403 vs 409) | ✅ | ✅ |
+
+### Top Interview Questions for Target Companies
+
+**Razorpay / PhonePe / Stripe:**
+- "Walk me through login end to end" → validate credentials → BCrypt match → generate JWT → return token
+- "How do you secure protected endpoints?" → JWT filter → validate signature → set SecurityContext
+- "How do you handle password security?" → BCrypt with salt and work factor — never store plain text
+- "Why JWT over sessions?" → Stateless, any instance validates, works for mobile + web
+- "What's 401 vs 403?" → 401 = not authenticated, 403 = authenticated but not authorized
+- "How do you prevent returning sensitive data in API responses?" → DTOs — never expose entities
+
+**Google / Amazon / Uber:**
+- "How do you manage configuration across microservices?" → Spring Cloud Config (Phase 6)
+- "How do you handle distributed transactions?" → Saga pattern (Phase 3)
+- "What's your database migration strategy?" → Flyway with versioned scripts, never modify run migrations
+- "How does your JWT filter work?" → OncePerRequestFilter, reads Bearer token, validates HMAC signature, sets SecurityContext
+
+---
+
+*Last updated: Session 2 — Phase 1 (User Service) 100% complete*
+*Next session: Wallet Service — double-entry ledger, idempotency keys, optimistic locking*
