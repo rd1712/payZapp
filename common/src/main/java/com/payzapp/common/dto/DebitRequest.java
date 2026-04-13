@@ -1,4 +1,4 @@
-package com.payzapp.walletservice.dto;
+package com.payzapp.common.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

@@ -1,7 +1,7 @@
 package com.payzapp.walletservice.controller;
 
-import com.payzapp.walletservice.dto.DebitRequest;
-import com.payzapp.walletservice.dto.DebitResponse;
+import com.payzapp.common.dto.DebitRequest;
+import com.payzapp.common.dto.DebitResponse;
 import com.payzapp.walletservice.dto.WalletResponse;
 import com.payzapp.walletservice.service.WalletService;
 import jakarta.validation.Valid;

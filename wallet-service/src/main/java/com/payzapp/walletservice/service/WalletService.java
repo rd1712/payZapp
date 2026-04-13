@@ -1,9 +1,9 @@
 package com.payzapp.walletservice.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.gson.JsonParser;
-import com.payzapp.walletservice.dto.DebitRequest;
-import com.payzapp.walletservice.dto.DebitResponse;
+
+import com.payzapp.common.dto.DebitRequest;
+import com.payzapp.common.dto.DebitResponse;
 import com.payzapp.walletservice.dto.WalletResponse;
 import com.payzapp.walletservice.exception.WalletAlreadyExistsException;
 import com.payzapp.walletservice.exception.WalletDoesntExistException;

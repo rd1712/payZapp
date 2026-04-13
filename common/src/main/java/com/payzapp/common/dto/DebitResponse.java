@@ -1,6 +1,7 @@
-package com.payzapp.walletservice.dto;
+package com.payzapp.common.dto;
 
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.util.UUID;
 
