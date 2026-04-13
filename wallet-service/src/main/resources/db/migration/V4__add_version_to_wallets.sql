@@ -1,0 +1,1 @@
+ALTER TABLE wallets ADD COLUMN version BIGINT DEFAULT 0;

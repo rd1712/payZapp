@@ -17,6 +17,8 @@ import java.util.UUID;
 @NoArgsConstructor @AllArgsConstructor
 @Builder
 public class Wallet {
+    @Version
+    private Long version;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -39,4 +41,6 @@ public class Wallet {
     @LastModifiedDate
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+
 }
