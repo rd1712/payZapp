@@ -1,9 +1,11 @@
 package com.payzapp.paymentservice.service;
 
 import com.payzapp.common.dto.DebitRequest;
+import com.payzapp.common.events.PaymentSettledEvent;
 import com.payzapp.paymentservice.client.WalletClient;
 import com.payzapp.paymentservice.dto.PaymentRequest;
 import com.payzapp.paymentservice.dto.PaymentResponse;
+import com.payzapp.paymentservice.kafka.KafkaProducerService;
 import com.payzapp.paymentservice.model.Payment;
 import com.payzapp.paymentservice.model.PaymentStatus;
 import com.payzapp.paymentservice.repository.PaymentRepository;
@@ -11,6 +13,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +24,7 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final WalletClient walletClient;
+    private final KafkaProducerService kafkaProducerService;
 
     private static final Map<PaymentStatus, List<PaymentStatus>> VALID_TRANSITIONS = new HashMap<>();
 
@@ -74,6 +78,13 @@ public class PaymentService {
             validateTransition(payment.getStatus(), PaymentStatus.SETTLED);
             payment.setStatus(PaymentStatus.SETTLED);
             paymentRepository.save(payment);
+            kafkaProducerService.publishPaymentSettled(PaymentSettledEvent.builder()
+                    .paymentId(payment.getPaymentId())
+                    .fromWalletId(payment.getFromWalletId())
+                    .toWalletId(payment.getToWalletId())
+                    .amount(payment.getAmount())
+                    .status(payment.getStatus().toString())
+                    .settledAt(LocalDateTime.now()).build());
 
         } catch (Exception e) {
             System.out.println("Payment failed: " + e.getMessage());
