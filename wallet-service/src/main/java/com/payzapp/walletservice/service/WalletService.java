@@ -2,6 +2,7 @@ package com.payzapp.walletservice.service;
 
 import com.payzapp.walletservice.dto.WalletResponse;
 import com.payzapp.walletservice.exception.WalletAlreadyExistsException;
+import com.payzapp.walletservice.exception.WalletDoesntExistException;
 import com.payzapp.walletservice.model.Wallet;
 import com.payzapp.walletservice.model.WalletStatus;
 import com.payzapp.walletservice.repository.WalletRepository;
@@ -35,6 +36,14 @@ public class WalletService {
                     .build();
 
 
+
+    }
+
+    public BigDecimal getBalance(UUID userId){
+        Wallet wallet = walletRepository.findByUserId(userId)
+                .orElseThrow(()-> new WalletDoesntExistException("Wallet does not exist"));
+
+        return wallet.getBalance();
 
     }
 }
