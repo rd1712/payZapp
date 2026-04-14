@@ -7,10 +7,7 @@ import com.payzapp.walletservice.service.WalletService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -41,4 +38,10 @@ public class WalletController {
     public DebitResponse credit(@Valid @RequestBody DebitRequest request) {
         return walletService.credit(request);
     }
+
+    @PostMapping("/api/wallet/freeze/{walletId}")
+    public void freezeWallet(@PathVariable("walletId") UUID walletId) {
+        walletService.freezeWallet(walletId);
+    }
+
 }

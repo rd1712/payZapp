@@ -27,6 +27,7 @@ public class WalletService {
     private final LedgerEntryRepository ledgerEntryRepository;
     private final ObjectMapper objectMapper;
 
+
     public WalletResponse createWallet(UUID userId) {
         if (walletRepository.existsByUserId(userId)) {
             throw new WalletAlreadyExistsException("Wallet Already Exists");
@@ -86,6 +87,10 @@ public class WalletService {
         // Step 3: Find wallet
         Wallet wallet = walletRepository.findById(request.getWalletId())
                 .orElseThrow(() -> new WalletDoesntExistException("Wallet not found"));
+
+        if (wallet.getStatus() == WalletStatus.FROZEN) {
+            throw new RuntimeException("Wallet is frozen - cannot process transaction");
+        }
 
         // Step 4: Check sufficient balance
         if (wallet.getBalance().compareTo(request.getAmount()) < 0) {
@@ -170,6 +175,10 @@ public class WalletService {
         Wallet wallet = walletRepository.findById(request.getWalletId())
                 .orElseThrow(() -> new WalletDoesntExistException("Wallet not found"));
 
+        if (wallet.getStatus() == WalletStatus.FROZEN) {
+            throw new RuntimeException("Wallet is frozen - cannot process transaction");
+        }
+
         // Step 4: Credit balance
         wallet.setBalance(wallet.getBalance().add(request.getAmount()));
         walletRepository.save(wallet);
@@ -217,5 +226,17 @@ public class WalletService {
         }
 
         return response;
+    }
+
+    public void freezeWallet(UUID walletId) {
+        Wallet wallet = walletRepository.findById(walletId)
+                .orElseThrow(() -> new WalletDoesntExistException("Wallet not found"));
+
+        if (wallet.getStatus() == WalletStatus.FROZEN) {
+            throw new RuntimeException("Wallet is already frozen");
+        }
+
+        wallet.setStatus(WalletStatus.FROZEN);
+        walletRepository.save(wallet);
     }
 }

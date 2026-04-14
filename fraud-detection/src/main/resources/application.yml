@@ -5,6 +5,20 @@ spring:
   application:
     name: fraud-service
 
+  main:
+    web-application-type: none
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: fraud-detection-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.payzapp.common.events"
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
 eureka:
   client:
     service-url:
