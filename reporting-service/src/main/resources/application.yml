@@ -4,8 +4,31 @@ server:
 spring:
   application:
     name: reporting-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/reportingdb
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: reporting-service-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.payzapp.common.events"
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
 
 eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
+
+jwt:
+  secret: cGF5emFwcC1zZWNyZXQta2V5LXRoYXQtaXMtbG9uZy1lbm91Z2gtZm9yLWhzMjU2
+  expiration: 86400000
