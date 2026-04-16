@@ -20,6 +20,7 @@
         <module>notification-service</module>
         <module>fraud-detection</module>
         <module>reporting-service</module>
+        <module>eureka-server</module>
     </modules>
 
     <properties>
