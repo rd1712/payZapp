@@ -29,6 +29,7 @@
         <spring-cloud.version>2023.0.0</spring-cloud.version>
         <jjwt.version>0.11.5</jjwt.version>
         <lombok.version>1.18.36</lombok.version>
+        <zipkin.version>2.16.3</zipkin.version>
     </properties>
 
     <dependencyManagement>

@@ -17,6 +17,10 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  cloud:
+    openfeign:
+          micrometer:
+            enabled: true
 eureka:
   client:
     service-url:
@@ -28,5 +32,22 @@ app:
   kafka:
     topic:
       payment-events: payzapp-payment-events
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
+logging:
+  level:
+    zipkin2: DEBUG
+    brave: DEBUG
+
 
 
