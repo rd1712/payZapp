@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +46,19 @@ public class PaymentService {
 
     @Transactional
     public PaymentResponse initiatePayment(PaymentRequest request) {
+
+        // Idempotency check
+        Optional<Payment> existingPayment = paymentRepository.findByIdempotencyKey(request.getIdempotencyKey());
+        if (existingPayment.isPresent()) {
+            Payment existing = existingPayment.get();
+            return PaymentResponse.builder()
+                    .paymentId(existing.getPaymentId())
+                    .fromWalletId(existing.getFromWalletId())
+                    .toWalletId(existing.getToWalletId())
+                    .amount(existing.getAmount())
+                    .status(existing.getStatus())
+                    .build();
+        }
 
         // Step 1: Create payment record
         Payment payment = paymentRepository.save(Payment.builder()
